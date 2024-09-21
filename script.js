@@ -1,77 +1,51 @@
-const flashcard = document.getElementById('flashcard');
-flashcard.addEventListener('click', () => flashcard.classList.toggle('flipped'));
+miro.onReady(async () => {
+    try {
+        // Retrieve the current user's permissions
+        const userPermissions = await miro.currentUser.getScopes();
+        console.log('Permissions granted:', userPermissions); // Debugging
 
-// Function to populate the flashcard with optional images and text
-function populateFlashcard(frontText, backText, frontImage = null, backImage = null) {
-  const frontContent = document.getElementById('flashcard-front-content');
-  const backContent = document.getElementById('flashcard-back-content');
+        // Check for critical permissions
+        const canCreateWidgets = userPermissions.includes('board:widgets:create');
+        const canReadWidgets = userPermissions.includes('board:widgets:read');
 
-  frontContent.innerHTML = '';
-  backContent.innerHTML = '';
+        // Disable button if the permission to create widgets is not granted
+        if (!canCreateWidgets) {
+            alert('This app requires permission to create widgets on the board.');
+            document.getElementById('createFlashcardButton').disabled = true; // Disable button
+        } else {
+            // Enable button if permission is granted
+            document.getElementById('createFlashcardButton').addEventListener('click', createFlashcard);
+        }
 
-  if (frontImage) {
-    const frontImgElement = document.createElement('img');
-    frontImgElement.src = frontImage;
-    frontImgElement.alt = 'Front Image';
-    frontImgElement.classList.add('flashcard-image');
-    frontContent.appendChild(frontImgElement);
-  }
+        // Optional: Handle the flashcard flip feature
+        const flashcard = document.getElementById('flashcard');
+        flashcard.addEventListener('click', () => flashcard.classList.toggle('flipped'));
 
-  const frontTextElement = document.createElement('p');
-  frontTextElement.classList.add('flashcard-text');
-  frontTextElement.textContent = frontText;
-  frontContent.appendChild(frontTextElement);
-
-  if (backImage) {
-    const backImgElement = document.createElement('img');
-    backImgElement.src = backImage;
-    backImgElement.alt = 'Back Image';
-    backImgElement.classList.add('flashcard-image');
-    backContent.appendChild(backImgElement);
-  }
-
-  const backTextElement = document.createElement('p');
-  backTextElement.classList.add('flashcard-text');
-  backTextElement.textContent = backText;
-  backContent.appendChild(backTextElement);
-}
-
-miro.onReady(() => {
-  miro.initialize({
-    extensionPoints: {
-      toolbar: {
-        title: 'Create Flashcard',
-        svgIcon: '<svg>...</svg>', // Add your custom icon here
-        onClick: createFlashcard,
-      },
-    },
-  });
+    } catch (error) {
+        console.error('Error checking permissions:', error);
+    }
 });
 
+// Function to create a flashcard
 async function createFlashcard() {
-  // User can provide text, and optionally an image, for front and back
-  const frontText = prompt("Enter text for the front of the flashcard:");
-  const backText = prompt("Enter text for the back of the flashcard:");
-  const frontImage = prompt("Enter URL for the front image (optional):");
-  const backImage = prompt("Enter URL for the back image (optional):");
+    // Check permissions again before proceeding to create
+    const userPermissions = await miro.currentUser.getScopes();
+    if (!userPermissions.includes('board:widgets:create')) {
+        alert('Cannot create a flashcard without permission.');
+        return; // Exit if permission is missing
+    }
 
-  // Populate the flashcard in the Miro board or the web interface
-  populateFlashcard(frontText, backText, frontImage, backImage);
+    // Logic for creating a flashcard in Miro
+    const widget = await miro.board.widgets.create({
+        type: 'card',
+        title: 'Flashcard Front',
+        description: 'Flashcard Back',
+    });
 
-  const widget = await miro.board.widgets.create({
-    type: 'card',
-    title: frontText || 'Flashcard Front',
-    description: backText || 'Flashcard Back',
-    style: {
-      backgroundColor: '#ADD8E6', // Light blue
-    },
-  });
-
-  // Toggle between front and back on click
-  widget.onClick = async () => {
-    const updated = widget.title === frontText
-      ? { title: backText || 'Flashcard Back', description: frontText || 'Flashcard Front', style: { backgroundColor: '#90EE90' } }
-      : { title: frontText || 'Flashcard Front', description: backText || 'Flashcard Back', style: { backgroundColor: '#ADD8E6' } };
-    await miro.board.widgets.update({ id: widget.id, ...updated });
-  };
+    widget.onClick = async () => {
+        const updated = widget.title === 'Flashcard Front'
+            ? { title: 'Flashcard Back', description: 'Flashcard Front' }
+            : { title: 'Flashcard Front', description: 'Flashcard Back' };
+        await miro.board.widgets.update({ id: widget.id, ...updated });
+    };
 }
